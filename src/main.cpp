@@ -203,7 +203,7 @@ void loop() {
   uint8_t keyArray[7];
   //const int32_t keys [] = {static_cast<int>(pow(2,32)*261.63/22000, pow(2,32)*277.18/22000, pow(2,32)*293.66/22000, pow(2,32)*311.13/22000, pow(2,32)*329.63/22000, pow(2,32)*349.23/22000, pow(2,32)*369.99/22000, pow(2,32)*392/22000, pow(2,32)*415.3/22000, pow(2,32)*440/22000, pow(2,32)*466.16/22000, pow(2,32)*493.88/22000)};
   const int32_t keys [] = {51076922,54112683,57330004,60740598,64352275,68178701,72231588,76528508,81077269,85899345,91006452,96418111};
-   int32_t stepSizes;
+  int32_t stepSizes;
   /*
   for (int i=0;i<12;i++){
     stepSizes [i] = {2^23*keys[i]/22000};
@@ -224,7 +224,7 @@ void loop() {
     //u8g2.print(count++);
     //u8g2.sendBuffer();          // transfer internal memory to the display
 
-    for(int i=0; i<12; i++){
+    for(int i=0; i<3; i++){
       uint8_t rowindex = i;
       setRow(rowindex);
       delayMicroseconds(3);
@@ -234,13 +234,21 @@ void loop() {
     } 
     
 
-    for(int i=0;i<12;i++){
-
+    for(int i=0;i<3;i++){
+      //u8g2.setCursor(2,40);
+      //u8g2.print(keyArray[i],HEX); 
+      //u8g2.setCursor(2,20);
+      //u8g2.print(currentStepSize);
+      //u8g2.print(mapkey(mapindex(keyArray,i)));
+      //int index=mapindex(keyArray, i);
+      //currentStepSize = keys[mapindex(keyArray, i)];
+      //u8g2.setCursor(2,20);
+      //u8g2.print(currentStepSize,DEC);
       if(mapindex(keyArray, i)==0){
         u8g2.drawStr(2,10,"C");
         stepSizes = keys[0];
         u8g2.setCursor(2,20);
-        u8g2.print(stepSizes,DEC);
+        u8g2.print(keys[0],DEC);
       }
       else if(mapindex(keyArray, i)==1){
         u8g2.drawStr(2,10,"C#");
@@ -312,10 +320,10 @@ void loop() {
         u8g2.drawStr(2,10," ");
         stepSizes = stepSizes;
       }
-      currentStepSize = stepSizes;
-      u8g2.setCursor(2,30);
-      u8g2.print(currentStepSize,DEC);
-
+      __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
+      //String display = mapkey(mapindex(keyArray,i));
+      //u8g2.print(display);
+      //u8g2.print(mapkey(mapindex(keyArray[i],i)));
     }
 
     u8g2.sendBuffer();     
