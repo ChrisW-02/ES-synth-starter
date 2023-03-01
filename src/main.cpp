@@ -79,6 +79,75 @@ void setup() {
   Serial.println("Hello World");
 }
 
+// read a single column
+uint8_t readCols(){
+  int C0 = digitalRead(C0_PIN);
+  int C1 = digitalRead(C1_PIN);
+  int C2 = digitalRead(C2_PIN);
+  int C3 = digitalRead(C3_PIN);
+  uint8_t res=0;
+  res |= (C0<<3);
+  res |= (C1<<2);
+  res |= (C2<<1);
+  res |= C3;
+  return res;
+}
+
+// 
+void setRow(uint8_t rowIdx){
+  digitalWrite(REN_PIN,LOW);
+  // if(rowIdx == 0){
+  //   digitalWrite(RA0_PIN,LOW);
+  //   digitalWrite(RA1_PIN,LOW);
+  //   digitalWrite(RA2_PIN,LOW);
+  // }
+  // else if(rowIdx == 1){
+  //   digitalWrite(RA0_PIN,HIGH);
+  //   digitalWrite(RA1_PIN,LOW);
+  //   digitalWrite(RA2_PIN,LOW);
+  // }
+  // else if(rowIdx == 2){
+  //   digitalWrite(RA0_PIN,LOW);
+  //   digitalWrite(RA1_PIN,HIGH);
+  //   digitalWrite(RA2_PIN,LOW);
+  // }
+  // else if(rowIdx == 3){
+  //   digitalWrite(RA0_PIN,HIGH);
+  //   digitalWrite(RA1_PIN,HIGH);
+  //   digitalWrite(RA2_PIN,LOW);
+  // }
+  // else if(rowIdx == 4){
+  //   digitalWrite(RA0_PIN,LOW);
+  //   digitalWrite(RA1_PIN,LOW);
+  //   digitalWrite(RA2_PIN,HIGH);
+  // }
+  // else if(rowIdx == 5){
+  //   digitalWrite(RA0_PIN,HIGH);
+  //   digitalWrite(RA1_PIN,LOW);
+  //   digitalWrite(RA2_PIN,HIGH);
+  // }
+  // else if(rowIdx == 6){
+  //   digitalWrite(RA0_PIN,LOW);
+  //   digitalWrite(RA1_PIN,HIGH);
+  //   digitalWrite(RA2_PIN,HIGH);
+  // }
+  // else if(rowIdx == 7){
+  //   digitalWrite(RA0_PIN,HIGH);
+  //   digitalWrite(RA1_PIN,HIGH);
+  //   digitalWrite(RA2_PIN,HIGH);
+  // }
+  digitalWrite(RA0_PIN, bitRead(rowIdx,0));
+  digitalWrite(RA1_PIN, bitRead(rowIdx,1));
+  digitalWrite(RA2_PIN, bitRead(rowIdx,2));
+  digitalWrite(REN_PIN,HIGH);
+
+}
+
+// waveform for sound
+const float keys [12] = {261.63,277.18,293.66,311.13,329.63,349.23, 369.99,392.00,415.30, 440.00,466.16,493.88};
+int32_t stepSizes [12];
+
+
 void loop() {
   // put your main code here, to run repeatedly:
   static uint32_t next = millis();
@@ -92,10 +161,40 @@ void loop() {
     u8g2.setFont(u8g2_font_ncenB08_tr); // choose a suitable font
     u8g2.drawStr(2,10,"Helllo World!");  // write something to the internal memory
     u8g2.setCursor(2,20);
-    u8g2.print(count++);
+    // u8g2.print(count++);
+
+    // readCols
+    uint8_t keys = readCols();
+    uint8_t keyArray[7];
+
+    // 12 keys reading
+    for(int i=0; i<3;i++){
+      uint8_t rowindex= i;  
+      setRow(rowindex);
+      delayMicroseconds(3);
+      keyArray[i] = readCols();
+      u8g2.setCursor(2,20);
+    } 
+    for(int i=0;i<3;i++){
+    u8g2.print(keyArray[i],HEX); 
+    }
+
+    // set stepsizes
+    for (int i=0; i<12; i++){
+      int s = 2^32*keyArray[i]/22000;
+      stepSizes[i] = s;
+    }
+    
+    volatile int32_t currentStepSize;
+
+    u8g2.setCursor(2,20);
+    // u8g2.print(keys,HEX);
     u8g2.sendBuffer();          // transfer internal memory to the display
 
     //Toggle LED
     digitalToggle(LED_BUILTIN);
+
+    
   }
 }
+
