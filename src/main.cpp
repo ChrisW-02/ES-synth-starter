@@ -4,6 +4,10 @@
 //Constants
   const uint32_t interval = 100; //Display update interval
 
+// global variable
+volatile int32_t currentStepSize;
+//volatile uint8_t keyArray[7];
+
 //Pin definitions
   //Row select and enable
   const int RA0_PIN = D3;
@@ -146,6 +150,12 @@ String mapkey(int index){
   //char op[] = str;
   return str;
 }
+void sampleISR() {
+  static int32_t phaseAcc = 0;
+  phaseAcc += currentStepSize;
+  int32_t Vout = phaseAcc >> 24;
+  //analogWrite(OUTR_PIN, Vout + 128);
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -174,6 +184,12 @@ void setup() {
   u8g2.begin();
   setOutMuxBit(DEN_BIT, HIGH);  //Enable display power supply
 
+  TIM_TypeDef *Instance = TIM1;
+  HardwareTimer *sampleTimer = new HardwareTimer(Instance);
+  sampleTimer->setOverflow(22000, HERTZ_FORMAT);
+  sampleTimer->attachInterrupt(sampleISR);
+  sampleTimer->resume();
+
   //Initialise UART
   Serial.begin(9600);
   Serial.println("Hello World");
@@ -183,15 +199,14 @@ void loop() {
   // put your main code here, to run repeatedly:
   static uint32_t next = millis();
   static uint32_t count = 0;
-  // const int32_t stepSizes[12] = {fss(261.63),fss(277.18),fss(293.66),fss(311.13),fss(329.63),fss(349.23),fss(369.99),fss(392),fss(415.3),fss(440),fss(466.16),fss(493.88)};
-  volatile int32_t currentStepSize;
+  
   uint8_t keyArray[7];
-
-  const int32_t keys [] = {static_cast<int>(261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392, 415.3, 440, 466.16, 493.88)};
-  int32_t stepSizes[12];
+  const int32_t keys [] = {static_cast<int>(pow(2,23)*261.63/22000, pow(2,23)*277.18/22000, pow(2,23)*293.66/22000, pow(2,23)*311.13/22000, pow(2,23)*329.63/22000, pow(2,23)*349.23/22000, pow(2,23)*369.99/22000, pow(2,23)*392/22000, pow(2,23)*415.3/22000, pow(2,23)*440/22000, pow(2,23)*466.16/22000, pow(2,23)*493.88/22000)};
+  
+  /*int32_t stepSizes[12];
   for (int i=0;i<12;i++){
     stepSizes [i] = {2^23*keys[i]/22000};
-  }
+  }*/
   
   /*for(int i = 0; i < 12; i++){
     Serial.println(stepSizes[i]);
@@ -215,16 +230,7 @@ void loop() {
       keyArray[i] = readCols();
       //u8g2.setCursor(2,20);
       //u8g2.print(keyArray[i],HEX); 
-      
     } 
-    //u8g2.sendBuffer(); 
-
-    /*u8g2.setCursor(2,20);
-    for(int i=0;i<3;i++){
-      u8g2.print(keyArray[i],HEX); 
-      //u8g2.sendBuffer(); 
-    }*/
-    //u8g2.sendBuffer();          // transfer internal memory to the display
     
 
     for(int i=0;i<3;i++){
@@ -233,6 +239,10 @@ void loop() {
       //u8g2.setCursor(2,20);
       //u8g2.print(currentStepSize);
       //u8g2.print(mapkey(mapindex(keyArray,i)));
+      //int index=mapindex(keyArray, i);
+      currentStepSize = keys[mapindex(keyArray, i)];
+      u8g2.setCursor(2,20);
+      u8g2.print(currentStepSize,DEC);
       if(mapindex(keyArray, i)==0){
         u8g2.drawStr(2,10,"C");
       }
