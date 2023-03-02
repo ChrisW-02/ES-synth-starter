@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <STM32FreeRTOS.h>
+#include <iostream>
 
 
 //Constants
@@ -111,79 +113,93 @@ void sampleISR(){
 
 }
 
+
 void scanKeysTask(void* pvParameters){
-  const int32_t keys[13] = {fss(261.63),fss(277.18),fss(293.66),fss(311.13),fss(329.63),fss(349.23),fss(369.99),fss(392),fss(415.3),fss(440),fss(466.16),fss(493.88),0};
-  //volatile int32_t currentStepSize;
-  //uint8_t keyArray[7];
-  int32_t stepSizes;
+  const TickType_t xFrequency = 50/portTICK_PERIOD_MS;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  while(1){
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+    const int32_t keys[13] = {fss(261.63),fss(277.18),fss(293.66),fss(311.13),fss(329.63),fss(349.23),fss(369.99),fss(392),fss(415.3),fss(440),fss(466.16),fss(493.88),0};
+    //volatile int32_t currentStepSize;
+    //uint8_t keyArray[7];
+    int32_t stepSizes;
+    bool press_key;
+    press_key = false;
 
-    for(int i=0; i<3; i++){
-      uint8_t rowindex = i;
-      setRow(rowindex);
-      delayMicroseconds(3);
-      keyArray[i] = readCols();
-      
-    }     
-    
-
-    for(int i=0;i<3;i++){
-
-      if(mapindex(keyArray, i)==0){
-        u8g2.drawStr(2,10,"C");
-      }
-      else if(mapindex(keyArray, i)==1){
-        u8g2.drawStr(2,10,"C#");
-      }
-      else if(mapindex(keyArray, i)==2){
-        u8g2.drawStr(2,10,"D");
-      }
-      else if(mapindex(keyArray, i)==3){
-        u8g2.drawStr(2,10,"D#");
-      }
-      else if(mapindex(keyArray, i)==4){
-        u8g2.drawStr(2,10,"E");
-      }
-      else if(mapindex(keyArray, i)==5){
-        u8g2.drawStr(2,10,"F");
-      }
-      else if(mapindex(keyArray, i)==6){
-        u8g2.drawStr(2,10,"F#");
-      }
-      else if(mapindex(keyArray, i)==7){
-        u8g2.drawStr(2,10,"G");
-      }
-      else if(mapindex(keyArray, i)==8){
-        u8g2.drawStr(2,10,"G#");
-      }
-      else if(mapindex(keyArray, i)==9){
-        u8g2.drawStr(2,10,"A");
-      }
-      else if(mapindex(keyArray, i)==10){
-        u8g2.drawStr(2,10,"A#");
-      }
-      else if(mapindex(keyArray, i)==11){
-        u8g2.drawStr(2,10,"B");
-      }
-      else if(mapindex(keyArray, i)==12){
-        u8g2.drawStr(2,10," ");
-        stepSizes = stepSizes;
+      for(int i=0; i<3; i++){
+        uint8_t rowindex = i;
+        setRow(rowindex);
+        delayMicroseconds(3);
+        keyArray[i] = readCols();
       }
 
-      if(mapindex(keyArray, i)!=12){
+      for(int i=0;i<3;i++){
 
-        u8g2.setCursor(2,20);
-        //u8g2.print(stepSizes[mapindex(keyArray, i)]);
-        u8g2.print(i);
+        // if(mapindex(keyArray, i)==0){
+        //   u8g2.drawStr(2,10,"C");
+        // }
+        // else if(mapindex(keyArray, i)==1){
+        //   u8g2.drawStr(2,10,"C#");
+        // }
+        // else if(mapindex(keyArray, i)==2){
+        //   u8g2.drawStr(2,10,"D");
+        // }
+        // else if(mapindex(keyArray, i)==3){
+        //   u8g2.drawStr(2,10,"D#");
+        // }
+        // else if(mapindex(keyArray, i)==4){
+        //   u8g2.drawStr(2,10,"E");
+        // }
+        // else if(mapindex(keyArray, i)==5){
+        //   u8g2.drawStr(2,10,"F");
+        // }
+        // else if(mapindex(keyArray, i)==6){
+        //   u8g2.drawStr(2,10,"F#");
+        // }
+        // else if(mapindex(keyArray, i)==7){
+        //   u8g2.drawStr(2,10,"G");
+        // }
+        // else if(mapindex(keyArray, i)==8){
+        //   u8g2.drawStr(2,10,"G#");
+        // }
+        // else if(mapindex(keyArray, i)==9){
+        //   u8g2.drawStr(2,10,"A");
+        // }
+        // else if(mapindex(keyArray, i)==10){
+        //   u8g2.drawStr(2,10,"A#");
+        // }
+        // else if(mapindex(keyArray, i)==11){
+        //   u8g2.drawStr(2,10,"B");
+        // }
+        // else if(mapindex(keyArray, i)==12){
+        //   u8g2.drawStr(2,10," ");
+        //   stepSizes = stepSizes;
+        // }
 
-        stepSizes = keys[mapindex(keyArray, i)];
+        // if(mapindex(keyArray, i)!=12){
 
-        u8g2.setCursor(2,30);
-        u8g2.print(stepSizes);
+        //   u8g2.setCursor(2,20);
+        //   //u8g2.print(stepSizes[mapindex(keyArray, i)]);
+        //   u8g2.print(i);
+
+        //   stepSizes = keys[mapindex(keyArray, i)];
+
+        //   u8g2.setCursor(2,30);
+        //   u8g2.print(stepSizes);
+        // }
+
+        if(mapindex(keyArray,i) != 12 && press_key == false){
+          stepSizes = keys[mapindex(keyArray, i)];
+          press_key = true;
+        }
+        else if(mapindex(keyArray,i) == 12){
+          press_key = false;
+        }
+        if(keyArray[0]==15&&keyArray[1]==15&&keyArray[2]==15){
+          stepSizes=0;
+        }
+        __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
       }
-
-      //currentStepSize = stepSizes;
-      __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
-
     }
 }
 
@@ -224,106 +240,40 @@ void setup() {
   sampleTimer->setOverflow(22000, HERTZ_FORMAT);
   sampleTimer->attachInterrupt(sampleISR);
   sampleTimer->resume();
+
+  TaskHandle_t scanKeysHandle = NULL;
+  xTaskCreate(
+  scanKeysTask,		/* Function that implements the task */
+  "scanKeys",		/* Text name for the task */
+  64,      		/* Stack size in words, not bytes */
+  NULL,			/* Parameter passed into the task */
+  1,			/* Task priority */
+  &scanKeysHandle );  /* Pointer to store the task handle */
+
+  vTaskStartScheduler();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  //int index = 12;
-  static uint32_t next = millis();
-  static uint32_t count = 0;
-  //const int32_t keys[13] = {fss(261.63),fss(277.18),fss(293.66),fss(311.13),fss(329.63),fss(349.23),fss(369.99),fss(392),fss(415.3),fss(440),fss(466.16),fss(493.88),0};
-  //volatile int32_t currentStepSize;
-  //uint8_t keyArray[7];
-  //int32_t stepSizes;
+
+  // static uint32_t next = millis();
+  // static uint32_t count = 0;
   
-  if (millis() > next) {
-    next += interval;
+  // if (millis() > next) {
+  //   next += interval;
 
-    //Update display
-    u8g2.clearBuffer();         // clear the internal memory
-    u8g2.setFont(u8g2_font_ncenB08_tr); // choose a suitable font
-    //u8g2.drawStr(2,10,"Helllo World!");  // write something to the internal memory
-    //u8g2.setCursor(2,20);
-    //u8g2.print(count++);
-    //u8g2.sendBuffer();          // transfer internal memory to the display
-    /*
-    for(int i=0; i<3; i++){
-      uint8_t rowindex = i;
-      setRow(rowindex);
-      delayMicroseconds(3);
-      keyArray[i] = readCols();
-      
-    }     
+  //   //Update display
+  //   u8g2.clearBuffer();         // clear the internal memory
+  //   u8g2.setFont(u8g2_font_ncenB08_tr); // choose a suitable font
+
+  //   uint32_t* k = NULL;
+
+  //   scanKeysTask(k);
+
+  //   u8g2.sendBuffer();     
+  //   //currentStepSize = stepSizes[index];
     
-
-    for(int i=0;i<3;i++){
-
-      if(mapindex(keyArray, i)==0){
-        u8g2.drawStr(2,10,"C");
-      }
-      else if(mapindex(keyArray, i)==1){
-        u8g2.drawStr(2,10,"C#");
-      }
-      else if(mapindex(keyArray, i)==2){
-        u8g2.drawStr(2,10,"D");
-      }
-      else if(mapindex(keyArray, i)==3){
-        u8g2.drawStr(2,10,"D#");
-      }
-      else if(mapindex(keyArray, i)==4){
-        u8g2.drawStr(2,10,"E");
-      }
-      else if(mapindex(keyArray, i)==5){
-        u8g2.drawStr(2,10,"F");
-      }
-      else if(mapindex(keyArray, i)==6){
-        u8g2.drawStr(2,10,"F#");
-      }
-      else if(mapindex(keyArray, i)==7){
-        u8g2.drawStr(2,10,"G");
-      }
-      else if(mapindex(keyArray, i)==8){
-        u8g2.drawStr(2,10,"G#");
-      }
-      else if(mapindex(keyArray, i)==9){
-        u8g2.drawStr(2,10,"A");
-      }
-      else if(mapindex(keyArray, i)==10){
-        u8g2.drawStr(2,10,"A#");
-      }
-      else if(mapindex(keyArray, i)==11){
-        u8g2.drawStr(2,10,"B");
-      }
-      else if(mapindex(keyArray, i)==12){
-        u8g2.drawStr(2,10," ");
-        stepSizes = stepSizes;
-      }
-
-      if(mapindex(keyArray, i)!=12){
-
-        u8g2.setCursor(2,20);
-        //u8g2.print(stepSizes[mapindex(keyArray, i)]);
-        u8g2.print(i);
-
-        stepSizes = keys[mapindex(keyArray, i)];
-
-        u8g2.setCursor(2,30);
-        u8g2.print(stepSizes);
-      }
-
-      //currentStepSize = stepSizes;
-      __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
-
-    }*/
-
-    uint32_t* k = NULL;
-
-    scanKeysTask(k);
-
-    u8g2.sendBuffer();     
-    //currentStepSize = stepSizes[index];
-    
-    //Toggle LED
-    digitalToggle(LED_BUILTIN);
-  }
+  //   //Toggle LED
+  //   digitalToggle(LED_BUILTIN);
+  // }
 }
