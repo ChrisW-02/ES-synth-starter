@@ -3,11 +3,16 @@
 #include <STM32FreeRTOS.h>
 #include <iostream>
 #include <ES_CAN.h>
+#include <bitset>
 
 // Constants
 const uint32_t interval = 100; // Display update interval
 volatile int32_t currentStepSize;
 volatile uint8_t keyArray[7];
+volatile uint8_t finArray[12];
+const int sine[360] = {0, 2, 4, 6, 8, 11, 13, 15, 17, 20, 22, 24, 26, 28, 30, 33, 35, 37, 39, 41, 43, 45, 47, 50, 52, 54, 56, 58, 60, 62, 63, 65, 67, 69, 71, 73, 75, 77, 78, 80, 82, 83, 85, 87, 88, 90, 92, 93, 95, 96, 98, 99, 100, 102, 103, 104, 106, 107, 108, 109, 110, 111, 113, 114, 115, 116, 116, 117, 118, 119, 120, 121, 121, 122, 123, 123, 124, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 128, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 124, 123, 123, 122, 121, 121, 120, 119, 118, 117, 116, 116, 115, 114, 113, 111, 110, 109, 108, 107, 106, 104, 103, 102, 100, 99, 98, 96, 95, 93, 92, 90, 88, 87, 85, 83, 82, 80, 78, 77, 75, 73, 71, 69, 67, 65, 63, 62, 60, 58, 56, 54, 52, 50, 47, 45, 43, 41, 39, 37, 35, 33, 30, 28, 26, 24, 22, 20, 17, 15, 13, 11, 8, 6, 4, 2, 0, -2, -4, -6, -8, -11, -13, -15, -17, -20, -22, -24, -26, -28, -30, -33, -35, -37, -39, -41, -43, -45, -47, -50, -52, -54, -56, -58, -60, -62, -64, -65, -67, -69, -71, -73, -75, -77, -78, -80, -82, -83, -85, -87, -88, -90, -92, -93, -95, -96, -98, -99, -100, -102, -103, -104, -106, -107, -108, -109, -110, -111, -113, -114, -115, -116, -116, -117, -118, -119, -120, -121, -121, -122, -123, -123, -124, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -128, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -124, -123, -123, -122, -121, -121, -120, -119, -118, -117, -116, -116, -115, -114, -113, -111, -110, -109, -108, -107, -106, -104, -103, -102, -100, -99, -98, -96, -95, -93, -92, -90, -88, -87, -85, -83, -82, -80, -78, -77, -75, -73, -71, -69, -67, -65, -64, -62, -60, -58, -56, -54, -52, -50, -47, -45, -43, -41, -39, -37, -35, -33, -30, -28, -26, -24, -22, -20, -17, -15, -13, -11, -8, -6, -4, -2};
+std::string keystrArray[7];
+int time;
 SemaphoreHandle_t keyArrayMutex;
 volatile int32_t knob3Rotation = 4;
 // volatile uint8_t TX_Message[8] = {0};
@@ -196,12 +201,28 @@ int32_t detectknob3rot(uint8_t &preknob3, uint8_t keypress, bool &flag)
 
 void sampleISR()
 {
-  static uint32_t phaseAcc = 0;
-  phaseAcc += currentStepSize;
-  int32_t Vout = (phaseAcc >> 24) - 128;
-  Vout = Vout >> (8 - knob3Rotation);
-  analogWrite(OUTR_PIN, Vout + 128);
+  static uint32_t phaseAcc[12] = {0,0,0,0,0,0,0,0,0,0,0,0};
+  const int32_t keys[13] = {fss(261.63), fss(277.18), fss(293.66), fss(311.13), fss(329.63), fss(349.23), fss(369.99), fss(392), fss(415.3), fss(440), fss(466.16), fss(493.88), 0};
+  int32_t Vfin = 0;
+  for (int i=0; i<12; i++){
+      int temp = finArray[i];
+      if(temp==0){
+        int32_t currStepsize = keys[i];
+        phaseAcc[i] += currStepsize; //sawtooth
+        int32_t Vout = (phaseAcc[i] >> 24) - 128;
+        Vout = Vout >> (8 - knob3Rotation);
+        Vfin += Vout;
+
+        // for sine wave
+        // int idx = (((keys[i]<<1)*time)>>22)%360;
+        // Vfin += sine[idx];
+        // (Vfin + 128)>> 25>> (8 - knob3Rotation)
+      }
+    }
+  analogWrite(OUTR_PIN, Vfin + 128);
+  // time += 1;
 }
+
 
 void scanKeysTask(void *pvParameters)
 {
@@ -230,18 +251,42 @@ void scanKeysTask(void *pvParameters)
     int preindex;
     // uint8_t TX_Message[8] = {0};
 
+
     for (int i = 0; i < 4; i++)
     {
       uint8_t rowindex = i;
       setRow(rowindex);
       delayMicroseconds(3);
       keyArray[i] = readCols();
+      // std::bitset<4> KeyBits(keys);
+      // std::string keystr = KeyBits.to_string();
+      // // change the name of this
+      // keystrArray[i] = keystr;
     }
+
+
+    // getting finArray
+    uint32_t temp1 = keyArray[0];
+    uint32_t temp2 = keyArray[1];
+    uint32_t temp3 = keyArray[2];
+    uint32_t tmp = temp3;
+    for (int i=0; i<12; i++){
+      if(i == 4){
+        tmp = temp2;
+      }
+      else if(i == 8){
+        tmp = temp1;
+      }
+      finArray[11-i] = tmp %2;
+      tmp = tmp >> 1;
+    }    
+
 
     for (int i = 0; i < 4; i++)
     {
       xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
       uint8_t keypresse = keyArray[i];
+
       xSemaphoreGive(keyArrayMutex);
       if (mapindex(keypresse, i) != 12 && press_key == false)
       {
@@ -257,6 +302,8 @@ void scanKeysTask(void *pvParameters)
         press_key = false;
         stepSizes = 0;
       }
+
+
       if ((prestepSizes != stepSizes) && press_key == true)
       {
         TX_Message[0] = 'P';
@@ -383,7 +430,14 @@ void displayUpdateTask(void *pvParameters)
       // String display = mapkey(mapindex(keyArray,i));
       // u8g2.print(display);
       // u8g2.print(mapkey(mapindex(keyArray[i],i)));
+      
     }
+    // for(int j=0;j++;j<12){
+    //     std::cout<<"test"<<std::endl;
+    //     std::cout << finArray[j] << ",";
+    // }
+    // int test1 = finArray[4];
+    // std::cout << test1 << std::endl;
     while (CAN_CheckRXLevel())
     u8g2.setCursor(66, 30);
     u8g2.print((char)RX_Message[0]);
