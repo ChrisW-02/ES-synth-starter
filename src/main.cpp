@@ -15,6 +15,7 @@ std::string keystrArray[7];
 int time;
 SemaphoreHandle_t keyArrayMutex;
 volatile int32_t knob3Rotation = 4;
+volatile int32_t knob2Rotation = 4;
 // volatile uint8_t TX_Message[8] = {0};
 uint8_t RX_Message[8] = {0};
 QueueHandle_t msgInQ;
@@ -136,7 +137,39 @@ class Knob{
 
     uint8_t knob = 0;
     knob |= (bitRead(knob_val,2)<<1);
-    knob |= bitRead(knob_val,3);
+    knob |= bitRead(knob_val,3);  
+
+    if ((knob == 01 && preknob ==00) || (knob == 10 && preknob == 11))
+    {
+      rotation_var = rotation_var + 1;
+      increment = true;
+    }
+    else if ((knob == 00 && preknob == 01) || (knob == 11 && preknob == 10))
+    {
+      rotation_var = rotation_var - 1;
+      increment = false;
+    }
+    else if ((knob == 11 && preknob == 00) || (knob == 10 && preknob == 01) || (knob == 01 && preknob == 10) || (knob == 00 && preknob == 11))
+    {
+      if (increment == true){
+        rotation_var = rotation_var + 1;
+        increment = true;
+      }
+      else{
+        rotation_var = rotation_var - 1;
+        increment = false;
+      }
+    }
+    preknob = knob;
+    return rotation_var = constrain(rotation_var, 0, 8);
+  }
+
+  int32_t detectknob2rot()
+  {
+
+    uint8_t knob = 0;
+    knob |= (bitRead(knob_val,0)<<1);
+    knob |= bitRead(knob_val,1);
 
     if ((knob == 01 && preknob ==00) || (knob == 10 && preknob == 11))
     {
@@ -208,6 +241,13 @@ void sampleISR()
       int temp = finArray[i];
       if(temp==0){
         int32_t currStepsize = keys[i];
+        if(knob2Rotation>4){
+          currStepsize = currStepsize << (knob2Rotation-4);
+        }
+        else if(knob2Rotation<4){
+          currStepsize = currStepsize >> (4-knob2Rotation);
+        }
+        
         phaseAcc[i] += currStepsize; //sawtooth
         int32_t Vout = (phaseAcc[i] >> 24) - 128;
         Vout = Vout >> (8 - knob3Rotation);
@@ -228,11 +268,15 @@ void scanKeysTask(void *pvParameters)
 {
   const TickType_t xFrequency = 20 / portTICK_PERIOD_MS;
   TickType_t xLastWakeTime = xTaskGetTickCount();
-  uint8_t prestate;
+  uint8_t prestate2, prestate3;
   
   Knob knob3;
-  knob3.preknob = prestate;
+  knob3.preknob = prestate3;
   knob3.increment = false;
+  
+  Knob knob2;
+  knob2.preknob = prestate2;
+  knob2.increment = false;
 
   bool flag = false;
   uint8_t TX_Message[8] = {0};
@@ -245,7 +289,8 @@ void scanKeysTask(void *pvParameters)
 
     int32_t stepSizes;
     int32_t prestepSizes;
-    int32_t localknob3;
+    int32_t localknob3; //for volumn
+    int32_t localknob2; //for octave
     bool press_key;
     press_key = false;
     int preindex;
@@ -323,12 +368,16 @@ void scanKeysTask(void *pvParameters)
       {
         xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
         knob3.knob_val = keyArray[i];
+        knob2.knob_val = keyArray[i];
         //knob3.readknob();
         localknob3 = knob3.detectknob3rot();  
-        prestate = knob3.preknob;    
+        localknob2 = knob2.detectknob2rot(); 
+        prestate3 = knob3.preknob;    
+        prestate2 = knob2.preknob; 
         //localknob3 = detectknob3rot(prestate, keypresse, flag);
         xSemaphoreGive(keyArrayMutex);
         __atomic_store_n(&knob3Rotation, localknob3, __ATOMIC_RELAXED);
+        __atomic_store_n(&knob2Rotation, localknob2, __ATOMIC_RELAXED);
       }
     }
     CAN_TX(0x123, TX_Message);
@@ -359,6 +408,8 @@ void displayUpdateTask(void *pvParameters)
       uint8_t keypresse = keyArray[i];
       u8g2.setCursor(2, 20);
       u8g2.print(knob3Rotation, HEX);
+      u8g2.setCursor(2, 10);
+      u8g2.print(knob2Rotation, HEX);
       xSemaphoreGive(keyArrayMutex);
       if (mapindex(keypresse, i) == 0 && press_key == false)
       {
