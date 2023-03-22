@@ -18,12 +18,15 @@ SemaphoreHandle_t messageMutex;
 SemaphoreHandle_t CAN_TX_Semaphore; // transmit thread will use a semaphore to check when it can place a message in the outgoing mailbox
 volatile int32_t knob3Rotation = 4;
 volatile int32_t knob2Rotation = 4;
-volatile bool master = false; //change this boolean to set to sender or receiver
+volatile bool master = true; //change this boolean to set to sender or receiver
 volatile uint8_t Message[8] = {0};
 uint8_t RX_Message[8] = {0};
 volatile uint8_t note;
 QueueHandle_t msgInQ;  // incomming queue from CAN hardware then put in decode thread
 QueueHandle_t msgOutQ; // outgoing queue from any thread that wants to send a CAN message
+const int NOTE_POSITIONS[12] = {60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104};
+const int y_POSITIONS[12] = {10, 10, 9, 9, 8, 7, 7, 6, 6, 5, 5, 4};
+
 
 // Pin definitions
 // Row select and enable
@@ -206,40 +209,38 @@ public:
   }
 };
 
-/*
 
-int32_t detectknob3rot(uint8_t &preknob3, uint8_t keypress, bool &flag)
-{
-  uint8_t knob3 = 0;
-  knob3 |= (bitRead(keypress, 2) << 1);
-  knob3 |= bitRead(keypress, 3);
-  if ((knob3 == 01 && preknob3 == 00) || (knob3 == 10 && preknob3 == 11))
-  {
-    knob3Rotation = knob3Rotation + 1;
-    flag = true;
-  }
-  else if ((knob3 == 00 && preknob3 == 01) || (knob3 == 11 && preknob3 == 10))
-  {
-    knob3Rotation = knob3Rotation - 1;
-    flag = false;
-  }
-  else if ((knob3 == 11 && preknob3 == 00) || (knob3 == 10 && preknob3 == 01) || (knob3 == 01 && preknob3 == 10) || (knob3 == 00 && preknob3 == 11))
-  {
-    if (flag == true)
-    {
-      knob3Rotation = knob3Rotation + 1;
-      flag = true;
-    }
-    else
-    {
-      knob3Rotation = knob3Rotation - 1;
-      flag = false;
-    }
-  }
-  preknob3 = knob3;
-  return knob3Rotation = constrain(knob3Rotation, 0, 8);
+// Function to draw a bar for the volume
+void drawVolume(int volume) {
+  u8g2.setCursor(10,7);
+  u8g2.print("Vol:");
+  u8g2.drawFrame(10, 10, 30, 8); // Draw a border around the bar
+  u8g2.drawBox(10, 10, volume * 3.9, 8); // Draw the bar with a width proportional to the volume
 }
-*/
+
+// Function to draw the octave as a number to the power of 8
+void drawOctave(int octave) {
+  u8g2.setFont(u8g2_font_profont12_tf); // Use a small font
+  u8g2.setCursor(10, 30); // Position the cursor
+  u8g2.print("octave:8^"); // Print the base
+  u8g2.print(octave); // Print the exponent
+}
+
+// Function to draw a note on the staff
+void drawNote(int note) {
+  int x = NOTE_POSITIONS[note]; // Get the x position of the note
+  int y = y_POSITIONS[note];
+  u8g2.drawCircle(x, y, 1.5); // Draw a circle at the note position
+}
+
+// Function to draw the staff
+void drawStaff() {
+  for (int i = 0; i < 5; i++) {
+    int y = 0 + i * 2; // Calculate the y position of the staff line
+    u8g2.drawLine(60, y, 110, y); // Draw a line across the display
+  }
+ // u8g2.drawLine(60, 10, 110, 10); // Draw a line for the bottom of the staff
+}
 
 void sampleISR() //interupt
 {
@@ -439,6 +440,8 @@ void scanKeysTask(void *pvParameters)
   }
 }
 
+
+
 void displayUpdateTask(void *pvParameters)
 {
 
@@ -460,80 +463,97 @@ void displayUpdateTask(void *pvParameters)
     {
       xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
       uint8_t keypresse = keyArray[i];
-      u8g2.setCursor(2, 20);
-      u8g2.print(knob3Rotation, HEX);
-      u8g2.setCursor(2, 10);
-      u8g2.print(knob2Rotation, HEX);
-      if(master){
-        u8g2.setCursor(66, 30);
-        u8g2.print((char)Message[0]);
-        u8g2.print(Message[1]);
-        u8g2.print(Message[2]);
-      }
+      int32_t vol = knob3Rotation;
+      int32_t oct = knob2Rotation;
+      uint8_t index = Message[1];
+
+      //u8g2.setCursor(2, 30);
+      //u8g2.print(knob1Rotation, HEX);
+      /*
+      u8g2.setCursor(66, 30);
+      u8g2.print((char)Message[0]);
+      u8g2.print(Message[1]);
+      u8g2.print(Message[2]);
+      */
       xSemaphoreGive(keyArrayMutex);
+      drawVolume(vol);
+      drawOctave(oct);
+      drawStaff();
       if (mapindex(keypresse, i) == 0 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "C");
+        drawNote(0);
+        u8g2.drawStr(115, 10, "C");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 1 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "C#");
+        drawNote(1);
+        u8g2.drawStr(115, 10, "C#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 2 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "D");
+        drawNote(2);
+        u8g2.drawStr(115, 10, "D");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 3 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "D#");
+        drawNote(3);
+        u8g2.drawStr(115, 10, "D#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 4 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "E");
+        drawNote(4);
+        u8g2.drawStr(115, 10, "E");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 5 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "F");
+        drawNote(5);
+        u8g2.drawStr(115, 10, "F");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 6 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "F#");
+        drawNote(6);
+        u8g2.drawStr(115, 10, "F#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 7 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "G");
+        drawNote(7);
+        u8g2.drawStr(115, 10, "G");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 8 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "G#");
+       drawNote(8);
+        u8g2.drawStr(110, 10, "G#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 9 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "A");
+        drawNote(9);
+        u8g2.drawStr(115, 10, "A");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 10 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "A#");
+        drawNote(10);
+        u8g2.drawStr(115, 10, "A#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 11 && press_key == false)
       {
-        u8g2.drawStr(2, 30, "B");
+        drawNote(11);
+        u8g2.drawStr(115, 10, "B");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 12 && press_key == false)
       {
-        u8g2.drawStr(2, 30, " ");
+        u8g2.drawStr(115, 10, " ");
         press_key = false;
       }
 
@@ -553,27 +573,28 @@ void displayUpdateTask(void *pvParameters)
     /*
     while (CAN_CheckRXLevel())
     */
-
     if(master){
-      u8g2.setCursor(66, 20);
-      u8g2.print(currentStepSize);
+            //u8g2.setCursor(66, 20);
+    // u8g2.print(currentStepSize);
+
+      // print RX_Message
+      xSemaphoreTake(messageMutex, portMAX_DELAY);
+      // Copy the contents of the local array to the global array
+      u8g2.setCursor(100, 30);
+      u8g2.print((char)RX_Message[0]);
+      u8g2.print(RX_Message[1]);
+      u8g2.print(RX_Message[2]);
+      // Release the mutex
+      xSemaphoreGive(messageMutex);
     }
-    
-    // print RX_Message
-    xSemaphoreTake(messageMutex, portMAX_DELAY);
-    // Copy the contents of the local array to the global array
-    u8g2.setCursor(66, 10);
-    u8g2.print((char)RX_Message[0]);
-    u8g2.print(RX_Message[1]);
-    u8g2.print(RX_Message[2]);
-    // Release the mutex
-    xSemaphoreGive(messageMutex);
+
     u8g2.sendBuffer();
 
     // Toggle LED
     digitalToggle(LED_BUILTIN);
   }
 }
+
 
 // write incoming message into the queue in an ISR
 void CAN_RX_ISR(void)
