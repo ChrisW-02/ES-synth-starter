@@ -18,6 +18,7 @@ SemaphoreHandle_t messageMutex;
 SemaphoreHandle_t CAN_TX_Semaphore; // transmit thread will use a semaphore to check when it can place a message in the outgoing mailbox
 volatile int32_t knob3Rotation = 4;
 volatile int32_t knob2Rotation = 4;
+volatile int32_t knob1Rotation = 1; 
 volatile bool master = true; //change this boolean to set to sender or receiver
 volatile uint8_t Message[8] = {0};
 uint8_t RX_Message[8] = {0};
@@ -131,7 +132,6 @@ int mapindex(uint8_t keypress, int rowindex)
   }
   return index;
 }
-
 class Knob
 {
 public:
@@ -140,6 +140,8 @@ public:
   uint8_t knob_val;
   bool increment;
   int32_t rotation_var = 4;
+  int32_t rotation_var_slave = 1;
+
 
   int32_t detectknob3rot()
   {
@@ -207,6 +209,39 @@ public:
     preknob = knob;
     return rotation_var = constrain(rotation_var, 0, 8);
   }
+  int32_t detectknob1rot()
+  {
+
+    uint8_t knob = 0;
+    knob |= (bitRead(knob_val, 2) << 1);
+    knob |= bitRead(knob_val, 3);
+
+    if ((knob == 01 && preknob == 00) || (knob == 10 && preknob == 11))
+    {
+      rotation_var_slave = rotation_var_slave + 1;
+      increment = true;
+    }
+    else if ((knob == 00 && preknob == 01) || (knob == 11 && preknob == 10))
+    {
+      rotation_var_slave = rotation_var_slave - 1;
+      increment = false;
+    }
+    else if ((knob == 11 && preknob == 00) || (knob == 10 && preknob == 01) || (knob == 01 && preknob == 10) || (knob == 00 && preknob == 11))
+    {
+      if (increment == true)
+      {
+        rotation_var_slave = rotation_var_slave + 1;
+        increment = true;
+      }
+      else
+      {
+        rotation_var_slave = rotation_var_slave - 1;
+        increment = false;
+      }
+    }
+    preknob = knob;
+    return rotation_var_slave = constrain(rotation_var_slave, 0, 1);
+  }
 };
 
 
@@ -222,7 +257,7 @@ void drawVolume(int volume) {
 void drawOctave(int octave) {
   u8g2.setFont(u8g2_font_profont12_tf); // Use a small font
   u8g2.setCursor(10, 30); // Position the cursor
-  u8g2.print("octave:8^"); // Print the base
+  u8g2.print("octave:"); // Print the base
   u8g2.print(octave); // Print the exponent
 }
 
@@ -282,6 +317,7 @@ void scanKeysTask(void *pvParameters)
   TickType_t xLastWakeTime = xTaskGetTickCount();
   uint8_t prestate2;
   uint8_t prestate3;
+  uint8_t prestate1;
 
   Knob knob3;
   knob3.preknob = prestate3;
@@ -291,7 +327,12 @@ void scanKeysTask(void *pvParameters)
   knob2.preknob = prestate2;
   knob2.increment = false;
 
+  Knob knob1;
+  knob1.preknob = prestate1;
+  knob1.increment = false;
+
   bool flag = false;
+  bool set_master;
   uint8_t local_TX_Message[8] = {0};
   uint8_t send_TX_Message[8] = {0};
   while (1)
@@ -305,12 +346,13 @@ void scanKeysTask(void *pvParameters)
     int32_t prestepSizes;
     int32_t localknob3;
     int32_t localknob2;
+    int32_t localknob1;
     bool press_key;
     press_key = false;
     int preindex;
     // uint8_t TX_Message[8] = {0};
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
     {
       uint8_t rowindex = i;
       setRow(rowindex);
@@ -340,8 +382,9 @@ void scanKeysTask(void *pvParameters)
       finArray[11 - i] = tmp % 2;
       tmp = tmp >> 1;
     }
+    
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
     {
       xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
       uint8_t keypresse = keyArray[i];
@@ -414,7 +457,27 @@ void scanKeysTask(void *pvParameters)
         __atomic_store_n(&knob3Rotation, localknob3, __ATOMIC_RELAXED);
         __atomic_store_n(&knob2Rotation, localknob2, __ATOMIC_RELAXED);
       }
+      if (i == 4)
+      {
+
+        xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
+        knob1.knob_val = keyArray[i];
+        // knob3.readknob();
+        localknob1 = knob1.detectknob1rot();
+        prestate1 = knob1.preknob;
+        // localknob3 = detectknob3rot(prestate, keypresse, flag);
+        // if(knob1.detectknob1rot()==0){
+        //   set_master = false;
+        // }
+        // else{
+        //   set_master = true;
+        // }
+        xSemaphoreGive(keyArrayMutex);
+        __atomic_store_n(&knob1Rotation, localknob1, __ATOMIC_RELAXED);
+        // __atomic_store_n(&master, set_master, __ATOMIC_RELAXED);
+      }
     }
+
     // send the message over the bus using the CAN library
     // CAN_TX(0x123, TX_Message);
     // if you send a lot of messages at the same time, scanKeysTask()
@@ -467,8 +530,16 @@ void displayUpdateTask(void *pvParameters)
       int32_t oct = knob2Rotation;
       uint8_t index = Message[1];
 
-      //u8g2.setCursor(2, 30);
-      //u8g2.print(knob1Rotation, HEX);
+      u8g2.setCursor(60, 30);
+      if(knob1Rotation == 0){
+        u8g2.print("sender");
+      }
+      else{
+        u8g2.print("receiver");
+      }
+      u8g2.setCursor(60, 20);
+      u8g2.print(knob1Rotation, HEX);
+
       /*
       u8g2.setCursor(66, 30);
       u8g2.print((char)Message[0]);
