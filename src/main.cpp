@@ -19,7 +19,7 @@ SemaphoreHandle_t CAN_TX_Semaphore; // transmit thread will use a semaphore to c
 volatile int32_t knob3Rotation = 4;
 volatile int32_t knob2Rotation = 4;
 volatile int32_t knob1Rotation = 1; 
-volatile bool master = true; //change this boolean to set to sender or receiver
+volatile bool master = false; //change this boolean to set to sender or receiver
 volatile uint8_t Message[8] = {0};
 uint8_t RX_Message[8] = {0};
 volatile uint8_t note;
@@ -240,7 +240,14 @@ public:
       }
     }
     preknob = knob;
-    return rotation_var_slave = constrain(rotation_var_slave, 0, 1);
+    rotation_var_slave = constrain(rotation_var_slave, 0, 1);
+    if(rotation_var_slave==0){
+      master = false;
+    }
+    else{
+      master = true;
+    }
+    return rotation_var_slave;
   }
 };
 
@@ -307,7 +314,8 @@ void sampleISR() //interupt
         // Vfin += sine[idx];
         // (Vfin + 128)>> 25>> (8 - knob3Rotation)
     }
-  analogWrite(OUTR_PIN, Vfin + 128);
+  if(master){
+  analogWrite(OUTR_PIN, Vfin + 128);}
   // time += 1;
 }
 
@@ -423,7 +431,6 @@ void scanKeysTask(void *pvParameters)
           xSemaphoreGive(keyArrayMutex);
           __atomic_store_n(&Message[i], local_TX_Message[i], __ATOMIC_RELAXED);
           prestepSizes = stepSizes;
-
         }
         else{
           if ((prestepSizes != stepSizes) && press_key == true)
@@ -448,8 +455,13 @@ void scanKeysTask(void *pvParameters)
         knob3.knob_val = keyArray[i];
         knob2.knob_val = keyArray[i];
         // knob3.readknob();
-        localknob3 = knob3.detectknob3rot();
-        prestate3 = knob3.preknob;
+        if(master){
+          localknob3 = knob3.detectknob3rot();
+          prestate3 = knob3.preknob;
+        }
+        else{
+          localknob3 = 0;
+        }
         localknob2 = knob2.detectknob2rot();
         prestate2 = knob2.preknob;
         // localknob3 = detectknob3rot(prestate, keypresse, flag);
@@ -459,11 +471,12 @@ void scanKeysTask(void *pvParameters)
       }
       if (i == 4)
       {
-
+        
         xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
         knob1.knob_val = keyArray[i];
         // knob3.readknob();
         localknob1 = knob1.detectknob1rot();
+        //master = knob1.detectknob1rot();
         prestate1 = knob1.preknob;
         // localknob3 = detectknob3rot(prestate, keypresse, flag);
         // if(knob1.detectknob1rot()==0){
@@ -474,7 +487,7 @@ void scanKeysTask(void *pvParameters)
         // }
         xSemaphoreGive(keyArrayMutex);
         __atomic_store_n(&knob1Rotation, localknob1, __ATOMIC_RELAXED);
-        // __atomic_store_n(&master, set_master, __ATOMIC_RELAXED);
+        //__atomic_store_n(&master, localknob1, __ATOMIC_RELAXED);
       }
     }
 
@@ -531,7 +544,7 @@ void displayUpdateTask(void *pvParameters)
       uint8_t index = Message[1];
 
       u8g2.setCursor(60, 30);
-      if(knob1Rotation == 0){
+      if(!master){
         u8g2.print("sender");
       }
       else{
@@ -767,30 +780,26 @@ void setup()
   messageMutex = xSemaphoreCreateMutex();
   //  initialise queue handler
   msgInQ = xQueueCreate(36, 8);
-  if(!master){
-    CAN_TX_Semaphore = xSemaphoreCreateCounting(3,3);//The STM32 CAN hardware has three mailbox slots for outgoing messages
-    msgOutQ = xQueueCreate(36, 8);
-  }
+  CAN_TX_Semaphore = xSemaphoreCreateCounting(3,3);//The STM32 CAN hardware has three mailbox slots for outgoing messages
+  msgOutQ = xQueueCreate(36, 8);
+
 
   // initialise CAN
   CAN_Init(false);                // place CAN haredware in loopback mode it will receive and acknoledge its own message
-  if(master){
-    CAN_RegisterRX_ISR(CAN_RX_ISR); // passe a pointer to the relevant library function to set the ISR to be called whenever a CAN message is received
-  }
-  else{
-    CAN_RegisterTX_ISR(CAN_TX_ISR);
-  }
+  CAN_RegisterRX_ISR(CAN_RX_ISR); // passe a pointer to the relevant library function to set the ISR to be called whenever a CAN message is received
+  CAN_RegisterTX_ISR(CAN_TX_ISR);
+
   setCANFilter(0x123, 0x7ff);     // initialises the reception ID filter
   CAN_Start();
 
   // creat a timer
-  if(master){
-    TIM_TypeDef *Instance = TIM1;
-    HardwareTimer *sampleTimer = new HardwareTimer(Instance);
-    sampleTimer->setOverflow(22000, HERTZ_FORMAT);
-    sampleTimer->attachInterrupt(sampleISR);
-    sampleTimer->resume();
-  }
+  
+  TIM_TypeDef *Instance = TIM1;
+  HardwareTimer *sampleTimer = new HardwareTimer(Instance);
+  sampleTimer->setOverflow(22000, HERTZ_FORMAT);
+  sampleTimer->attachInterrupt(sampleISR);
+  sampleTimer->resume();
+
 
   TaskHandle_t scanKeysHandle = NULL; // 20ms
   xTaskCreate(
@@ -810,26 +819,26 @@ void setup()
       1,                   /* Task priority */
       &displayHandle);     /* Pointer to store the task handle */
 
-  if(master){
-    TaskHandle_t decodeHandle = NULL; // 25ms
-    xTaskCreate(
-        decodeText,     /* Function that implements the task */
-        "decodeText",   /* Text name for the task */
-        256,            /* Stack size in words, not bytes */
-        NULL,           /* Parameter passed into the task */
-        3,              /* Task priority */
-        &decodeHandle); /* Pointer to store the task handle */
-  }
-  else{
-    TaskHandle_t CAN_TXHandle = NULL;//60ms
-    xTaskCreate(
-        CAN_TX_Task,     // Function that implements the task
-        "CAN_TX_Task",       // Text name for the task
-        64,               //Stack size in words, not bytes
-        NULL,             //Parameter passed into the task
-        2,                // Task priority
-        &CAN_TXHandle); // Pointer to store the task handle
-  }
+  
+  TaskHandle_t decodeHandle = NULL; // 25ms
+  xTaskCreate(
+      decodeText,     /* Function that implements the task */
+      "decodeText",   /* Text name for the task */
+      256,            /* Stack size in words, not bytes */
+      NULL,           /* Parameter passed into the task */
+      3,              /* Task priority */
+      &decodeHandle); /* Pointer to store the task handle */
+
+  
+  TaskHandle_t CAN_TXHandle = NULL;//60ms
+  xTaskCreate(
+      CAN_TX_Task,     // Function that implements the task
+      "CAN_TX_Task",       // Text name for the task
+      64,               //Stack size in words, not bytes
+      NULL,             //Parameter passed into the task
+      2,                // Task priority
+      &CAN_TXHandle); // Pointer to store the task handle
+
                   
   vTaskStartScheduler();
 }
