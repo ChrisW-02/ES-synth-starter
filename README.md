@@ -140,7 +140,7 @@ SampleISR is implemented as an interrupt as it generates sound output which has 
 
 ## Execution Time
 
-  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&T;<sub>i</sub>**| **Iteration**| **$\frac {Exe}{Iter}$(ms)**|  **RMS Priority**|  **$\frac{\tau_n}{\tau_i}$**|  **Latency(ms)**|
+  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)T<sub>i</sub>**| **Iteration**| **$\frac {Exe}{Iter}$(ms)**|  **RMS Priority**|  **$\frac{\tau_n}{\tau_i}$**|  **Latency(ms)**|
 |-------------|------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
 |scanKeys|20|3.76|32|0.1175|4|5|0.5875
 |displayupdate|100|866.653|32|27.08291|1|1|27.0829063
@@ -162,7 +162,7 @@ The total time required for the task to complete under worst-case conditions is 
 
 ## CPU Utilization
 
-  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&tau;<sub>i</sub>**| **Iteration**| **CPU Utilisation(%)**|
+  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&T<sub>i</sub>**| **Iteration**| **CPU Utilisation(%)**|
 |-------------|------------|---------------------|---------------------|---------------------|
 |scanKeys|20|3.76|32|0.5875
 |displayupdate|100|866.653|32|27.08290625
