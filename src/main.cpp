@@ -10,6 +10,7 @@ const uint32_t interval = 100; // Display update interval
 volatile int32_t currentStepSize;
 volatile uint8_t keyArray[7];
 volatile uint8_t finArray[12];
+volatile uint8_t send_finArray[12];
 const int sine[360] = {0, 2, 4, 6, 8, 11, 13, 15, 17, 20, 22, 24, 26, 28, 30, 33, 35, 37, 39, 41, 43, 45, 47, 50, 52, 54, 56, 58, 60, 62, 63, 65, 67, 69, 71, 73, 75, 77, 78, 80, 82, 83, 85, 87, 88, 90, 92, 93, 95, 96, 98, 99, 100, 102, 103, 104, 106, 107, 108, 109, 110, 111, 113, 114, 115, 116, 116, 117, 118, 119, 120, 121, 121, 122, 123, 123, 124, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 128, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 124, 123, 123, 122, 121, 121, 120, 119, 118, 117, 116, 116, 115, 114, 113, 111, 110, 109, 108, 107, 106, 104, 103, 102, 100, 99, 98, 96, 95, 93, 92, 90, 88, 87, 85, 83, 82, 80, 78, 77, 75, 73, 71, 69, 67, 65, 63, 62, 60, 58, 56, 54, 52, 50, 47, 45, 43, 41, 39, 37, 35, 33, 30, 28, 26, 24, 22, 20, 17, 15, 13, 11, 8, 6, 4, 2, 0, -2, -4, -6, -8, -11, -13, -15, -17, -20, -22, -24, -26, -28, -30, -33, -35, -37, -39, -41, -43, -45, -47, -50, -52, -54, -56, -58, -60, -62, -64, -65, -67, -69, -71, -73, -75, -77, -78, -80, -82, -83, -85, -87, -88, -90, -92, -93, -95, -96, -98, -99, -100, -102, -103, -104, -106, -107, -108, -109, -110, -111, -113, -114, -115, -116, -116, -117, -118, -119, -120, -121, -121, -122, -123, -123, -124, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -128, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -124, -123, -123, -122, -121, -121, -120, -119, -118, -117, -116, -116, -115, -114, -113, -111, -110, -109, -108, -107, -106, -104, -103, -102, -100, -99, -98, -96, -95, -93, -92, -90, -88, -87, -85, -83, -82, -80, -78, -77, -75, -73, -71, -69, -67, -65, -64, -62, -60, -58, -56, -54, -52, -50, -47, -45, -43, -41, -39, -37, -35, -33, -30, -28, -26, -24, -22, -20, -17, -15, -13, -11, -8, -6, -4, -2};
 std::string keystrArray[7];
 int time;
@@ -19,10 +20,11 @@ SemaphoreHandle_t CAN_TX_Semaphore; // transmit thread will use a semaphore to c
 volatile int32_t knob3Rotation = 4;
 volatile int32_t knob2Rotation = 4;
 volatile int32_t knob1Rotation = 1; 
+volatile int32_t send_octave = 4;
 volatile bool master = false; //change this boolean to set to sender or receiver
 volatile uint8_t Message[8] = {0};
 uint8_t RX_Message[8] = {0};
-volatile uint8_t note;
+// volatile uint8_t note;
 QueueHandle_t msgInQ;  // incomming queue from CAN hardware then put in decode thread
 QueueHandle_t msgOutQ; // outgoing queue from any thread that wants to send a CAN message
 const int NOTE_POSITIONS[12] = {60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104};
@@ -289,25 +291,32 @@ void sampleISR() //interupt
   static uint32_t phaseAcc[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   const int32_t keys[13] = {fss(261.63), fss(277.18), fss(293.66), fss(311.13), fss(329.63), fss(349.23), fss(369.99), fss(392), fss(415.3), fss(440), fss(466.16), fss(493.88), 0};
   int32_t Vfin = 0;
+  int temp;
+  int octave;
   for (int i=0; i<24; i++){
+    int note;
       if(i<12){
-        int temp = finArray[i];
-        if(temp==0){
-          int32_t currStepsize = keys[i];
-          if(knob2Rotation>4){
-            currStepsize = currStepsize << (knob2Rotation-4);
-          }
-          else if(knob2Rotation<4){
-            currStepsize = currStepsize >> (4-knob2Rotation);
-          } 
-          phaseAcc[i] += currStepsize; //sawtooth
-        }}
-        if(i == note+12){
-          phaseAcc[i] += currentStepSize;
+        note = i;
+         temp = finArray[i];
+         octave = knob2Rotation;}
+      else{
+        note = i-12;
+        temp = send_finArray[i-12];
+        octave = send_octave;
+      }
+      if(temp==0){
+        int32_t currStepsize = keys[note];
+        if(octave>4){
+          currStepsize = currStepsize << (octave-4);
+        }
+        else if(octave<4){
+          currStepsize = currStepsize >> (4-octave);
         } 
-        int32_t Vout = (phaseAcc[i] >> 24) - 128;
-        Vout = Vout >> (8 - knob3Rotation);
-        Vfin += Vout;
+        phaseAcc[i] += currStepsize; //sawtooth
+      }
+      int32_t Vout = (phaseAcc[i] >> 24) - 128;
+      Vout = Vout >> (8 - knob3Rotation);
+      Vfin += Vout;
 
         // for sine wave
         // int idx = (((keys[i]<<1)*time)>>22)%360;
@@ -318,6 +327,8 @@ void sampleISR() //interupt
   analogWrite(OUTR_PIN, Vfin + 128);}
   // time += 1;
 }
+
+
 
 void scanKeysTask(void *pvParameters)
 {
@@ -415,40 +426,24 @@ void scanKeysTask(void *pvParameters)
         stepSizes = 0;
       }
 
-        if(master){
-          xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
-          if ((prestepSizes != stepSizes) && press_key == true)
-          {
-            local_TX_Message[0] = 'P';
-            local_TX_Message[1] = octave;
-            local_TX_Message[2] = mapindex(keypresse, i);
-            preindex = mapindex(keypresse, i);
-          }
-          if ((prestepSizes != stepSizes) && press_key == false)
-          {
-            local_TX_Message[0] = 'R';
-            local_TX_Message[1] = octave;
-            local_TX_Message[2] = preindex;
-          }
-          xSemaphoreGive(keyArrayMutex);
-          __atomic_store_n(&Message[i], local_TX_Message[i], __ATOMIC_RELAXED);
-          prestepSizes = stepSizes;
-        }
-        else{
+        if(!master){
           if ((prestepSizes != stepSizes) && press_key == true)
           {
             send_TX_Message[0] = 'P';
-            send_TX_Message[1] = octave;
             send_TX_Message[2] = mapindex(keypresse, i);
             preindex = mapindex(keypresse, i);
           }
           if ((prestepSizes != stepSizes) && press_key == false)
           {
             send_TX_Message[0] = 'R';
-            send_TX_Message[1] = octave;
             send_TX_Message[2] = preindex;
           }
           prestepSizes = stepSizes;
+          
+          send_TX_Message[1] = octave;
+          send_TX_Message[3] = temp1;
+          send_TX_Message[4] = temp2;
+          send_TX_Message[5] = temp3;
         }
         
       if (i == 3)
@@ -480,13 +475,7 @@ void scanKeysTask(void *pvParameters)
         localknob1 = knob1.detectknob1rot();
         //master = knob1.detectknob1rot();
         prestate1 = knob1.preknob;
-        // localknob3 = detectknob3rot(prestate, keypresse, flag);
-        // if(knob1.detectknob1rot()==0){
-        //   set_master = false;
-        // }
-        // else{
-        //   set_master = true;
-        // }
+
         xSemaphoreGive(keyArrayMutex);
         __atomic_store_n(&knob1Rotation, localknob1, __ATOMIC_RELAXED);
         //__atomic_store_n(&master, localknob1, __ATOMIC_RELAXED);
@@ -565,75 +554,82 @@ void displayUpdateTask(void *pvParameters)
       drawVolume(vol);
       drawOctave(oct);
       drawStaff();
+      
+      for(int i=0;i<12;i++){
+        if(finArray[i]==0){
+          drawNote(i);
+        }
+      }
+      
       if (mapindex(keypresse, i) == 0 && press_key == false)
       {
-        drawNote(0);
+        //drawNote(0);
         u8g2.drawStr(115, 10, "C");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 1 && press_key == false)
       {
-        drawNote(1);
+        //drawNote(1);
         u8g2.drawStr(115, 10, "C#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 2 && press_key == false)
       {
-        drawNote(2);
+        //drawNote(2);
         u8g2.drawStr(115, 10, "D");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 3 && press_key == false)
       {
-        drawNote(3);
+        //drawNote(3);
         u8g2.drawStr(115, 10, "D#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 4 && press_key == false)
       {
-        drawNote(4);
+        //drawNote(4);
         u8g2.drawStr(115, 10, "E");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 5 && press_key == false)
       {
-        drawNote(5);
+        //drawNote(5);
         u8g2.drawStr(115, 10, "F");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 6 && press_key == false)
       {
-        drawNote(6);
+        //drawNote(6);
         u8g2.drawStr(115, 10, "F#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 7 && press_key == false)
       {
-        drawNote(7);
+        //drawNote(7);
         u8g2.drawStr(115, 10, "G");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 8 && press_key == false)
       {
-       drawNote(8);
+       //drawNote(8);
         u8g2.drawStr(110, 10, "G#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 9 && press_key == false)
       {
-        drawNote(9);
+        //drawNote(9);
         u8g2.drawStr(115, 10, "A");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 10 && press_key == false)
       {
-        drawNote(10);
+        //drawNote(10);
         u8g2.drawStr(115, 10, "A#");
         press_key = true;
       }
       else if (mapindex(keypresse, i) == 11 && press_key == false)
       {
-        drawNote(11);
+        //drawNote(11);
         u8g2.drawStr(115, 10, "B");
         press_key = true;
       }
@@ -666,10 +662,12 @@ void displayUpdateTask(void *pvParameters)
       // print RX_Message
       xSemaphoreTake(messageMutex, portMAX_DELAY);
       // Copy the contents of the local array to the global array
-      u8g2.setCursor(100, 30);
+      u8g2.setCursor(70, 20);
       u8g2.print((char)RX_Message[0]);
       u8g2.print(RX_Message[1]);
       u8g2.print(RX_Message[2]);
+
+      
       // Release the mutex
       xSemaphoreGive(messageMutex);
     }
@@ -711,24 +709,28 @@ void decodeText(void *pvParameters)
     }
     const int32_t keys[13] = {fss(261.63), fss(277.18), fss(293.66), fss(311.13), fss(329.63), fss(349.23), fss(369.99), fss(392), fss(415.3), fss(440), fss(466.16), fss(493.88), 0};
     int32_t convert_stepSizes;
-    if (RX_Message[0] == 'P')
-    {
-      convert_stepSizes = keys[RX_Message[2]];
-    }
-    else if (RX_Message[0] == 'R')
-    {
-      convert_stepSizes = 0;
-    }
-    if (RX_Message[1] > 4)
-    {
-      convert_stepSizes = convert_stepSizes << (RX_Message[1] - 4);
-    }
-    else if (RX_Message[1] < 4)
-    {
-      convert_stepSizes = convert_stepSizes >> (4 - RX_Message[1]);
-    }
-    __atomic_store_n(&currentStepSize, convert_stepSizes, __ATOMIC_RELAXED);
-    __atomic_store_n(&note, RX_Message[2], __ATOMIC_RELAXED);
+      uint32_t temp1 = RX_Message[3];
+      uint32_t temp2 = RX_Message[4];
+      uint32_t temp3 = RX_Message[5];
+      
+      uint32_t tmp = temp3;
+      for (int i = 0; i < 12; i++)
+      {
+        if (i == 4)
+        {
+          tmp = temp2;
+        }
+        else if (i == 8)
+        {
+          tmp = temp1;
+        }
+        send_finArray[11 - i] = tmp % 2;
+        tmp = tmp >> 1;
+      }
+     
+
+    //__atomic_store_n(&send_finArray, tmp_finArray, __ATOMIC_RELAXED);
+    __atomic_store_n(&send_octave, RX_Message[1], __ATOMIC_RELAXED);
   }
 }
 
