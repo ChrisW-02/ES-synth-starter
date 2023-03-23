@@ -373,9 +373,11 @@ void scanKeysTask(void *pvParameters)
     }
 
     // getting finArray
+    xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
     uint32_t temp1 = keyArray[0];
     uint32_t temp2 = keyArray[1];
     uint32_t temp3 = keyArray[2];
+    xSemaphoreGive(keyArrayMutex);
     uint32_t tmp = temp3;
     for (int i = 0; i < 12; i++)
     {
