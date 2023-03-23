@@ -318,9 +318,10 @@ void sampleISR() //interupt
         phaseAcc[i] += currStepsize; //sawtooth
       }
       int32_t Vout = (phaseAcc[i] >> 24) - 128;
-      Vout = Vout >> (8 - knob3Rotation);
+      Vout = Vout >> (11 - knob3Rotation);
       Vfin += Vout;
     }
+
   if(master){
   analogWrite(OUTR_PIN, Vfin + 128);}
   // time += 1;
