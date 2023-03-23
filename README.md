@@ -1,15 +1,19 @@
 # ES-synth-starter
 
 ## Table of Content
+[bin file for blasting the MCU](/report/firmware.bin)
+
 [Functionality](#functionality)
 
 [Tasks](#tasks)
 
-[Shared data structures and the methods](#shared-data-structures-and-the-methods)
-
 [Execution Time](#execution-time)
 
 [CPU Utilization](#cpu-utilization)
+
+[Shared data structures and the methods](#shared-data-structures-and-the-methods)
+
+[Dependencies]()
 
 [Advanced Features](#advanced-features)
 
@@ -134,6 +138,46 @@ The tasks set to threads are dependent on key and knob related variables updated
 
 SampleISR is implemented as an interrupt as it generates sound output which has to respond to the key inputs quickly. It requires the highest priority and the function calls are simplified to allow short execution so other tasks would not be blocked.  CAN_TX_ISR and CAN_RX_ISR are defined in the similar way as the time when the mailbox becomes available and when the message is delivered are random. To ensure sending is implemented as soon as the mailbox is available and picking up every message in time, interrupts are used to handle these short and immediate tasks.
 
+## Execution Time
+
+  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&T;<sub>i</sub>**| **Iteration**| **$\frac {Exe}{Iter}$(ms)**|  **RMS Priority**|  **$\frac{\tau_n}{\tau_i}$**|  **Latency(ms)**|
+|-------------|------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
+|scanKeys|20|3.76|32|0.1175|4|5|0.5875
+|displayupdate|100|866.653|32|27.08291|1|1|27.0829063
+|decodeText|25.2|1.365|32|0.042656|3|4|0.170625
+|CAN_TX_Task|60|0.041|3|0.013667|2|2|0.02733333
+|sampleISR|0.045|0.034|3|0.011333||2223|25.194
+|RX_ISR|0.7|0.044|32|0.001375||143|0.196625
+|TX_ISR|0.7|0.044|32|0.001375||143|0.196625
+|||||||Total:|53.4556146
+
+## Critical Instant Analysis
+
+From the RMS diagram, the tasks with the shorter initiation interval are allocated to have higher priority, and they are scheduled to execute based on their priorities. The L_n is donated as the latency of the lowest-priority task at the worst-case instant in time.
+
+Considering the algorithmic complexity, the scanKeysTask takes a bit longer execution time than expected but reasonable, because several ‘for’ loops are iterated and knob detection functions are called three times to make sure all change in the input can be captured sensibly. The execution time of displayupdateTask is relevant to the display content, the text and the graphics functions elaborate the data processing.DecodeText is fast because it like a dictionary which just copy the local received message into global variable then copied into another three local variables.CAN_TX_Task is fast because it just take a message from the CAN message queue. Furthermore, although the sampleISR is triggered at a frequent basis with shortest execution time, since it contains a ‘for’ loop featuring 24 iteration, and  arrays of 24 elements and of  13 elements, which increases the computing complexity significantly, thus occupies 25.19% CPU utilization. The CAN_RX_ISR and CAN_TX_ISR always appear as a pair, giving same measurement value. 
+
+The total time required for the task to complete under worst-case conditions is calculated as  L<sub>n</sub> = $\sum_{i}$[$\frac{\tau_n}{\tau_i}$]$T_{i} \leqslant \tau_{n}$, which is obviously smaller than the deadline for the displayupdateTask, 100ms. The CIA verification is proved to pass. 
+
+
+## CPU Utilization
+
+  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&tau;<sub>i</sub>**| **Iteration**| **CPU Utilisation(%)**|
+|-------------|------------|---------------------|---------------------|---------------------|
+|scanKeys|20|3.76|32|0.5875
+|displayupdate|100|866.653|32|27.08290625
+|decodeText|25.2|1.365|32|0.169270833
+|CAN_TX_Task|60|0.041|3|0.022777778
+|sampleISR|0.045|0.034|3|25.18518519
+|RX_ISR|0.7|0.044|32|0.196428571
+|TX_ISR|0.7|0.044|32|0.196428571
+||||Total:|53.44049719
+
+From the calculation $\sum_{i}$[$\frac{T_i}{\tau_i}$], the 53.44% CPU utilization gives better responsiveness to give more quick response to new requests and reduces power consumption. It also provides room for further development to perform more advanced functions. 
+
+
+![RAM and flash utilization](report/ram_util.png)
+
 ##  Shared data structures and the methods
 ## finArray
 * Structure: `volatile uint8_t finArray[12];`
@@ -175,33 +219,11 @@ SampleISR is implemented as an interrupt as it generates sound output which has 
 * The detectknob1rot()function within the knob class retrieves a knob value that is restricted to a range of 0 to 1, and subsequently modifies the Master variable as necessary.
 * Even though the Master variable is global, it is not safeguarded by the mutex since it is accessed by multiple threads at the same time.
 
-## Execution Time
+## Dependencies
 
-  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&T;<sub>i</sub>**| **Iteration**| **$\frac {Exe}{Iter}$(ms)**|  **RMS Priority**|  **$\frac{\tau_n}{\tau_i}$**|  **Latency(ms)**|
-|-------------|------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-|scanKeys|20|3.76|32|0.1175|4|5|0.5875
-|displayupdate|100|866.653|32|27.08291|1|1|27.0829063
-|decodeText|25.2|1.365|32|0.042656|3|4|0.170625
-|CAN_TX_Task|60|0.041|3|0.013667|2|2|0.02733333
-|sampleISR|0.045|0.034|3|0.011333||2223|25.194
-|RX_ISR|0.7|0.044|32|0.001375||143|0.196625
-|TX_ISR|0.7|0.044|32|0.001375||143|0.196625
-|||||||Total:|53.4556146
+![Dependency graph](/report/dependency.png)
+The dependency graph clearly shows that most of the threads have directed, cyclic dependencies, which does not have the likelihood of deadlocks. However, there is a cycle when it comes to CAN_TX because a semaphore is utilised to signal when a message can be accepted. The semaphore is given by an ISR when space is available in the outgoing mailbox and taken by the CAN_TX_Task before loading a message. The thread won't be scheduled by the RTOS if the semaphore is unavailable. Since no other tasks are dependent on the sending of the message, there is no risk of dependency.
 
-## CPU Utilization
-
-  | **Task**| **Initiation Interval (ms)&tau;<sub>i</sub>**   |**ExecutionTime (ms)&tau;<sub>i</sub>**| **Iteration**| **CPU Utilisation(%)**|
-|-------------|------------|---------------------|---------------------|---------------------|
-|scanKeys|20|3.76|32|0.5875
-|displayupdate|100|866.653|32|27.08290625
-|decodeText|25.2|1.365|32|0.169270833
-|CAN_TX_Task|60|0.041|3|0.022777778
-|sampleISR|0.045|0.034|3|25.18518519
-|RX_ISR|0.7|0.044|32|0.196428571
-|TX_ISR|0.7|0.044|32|0.196428571
-||||Total:|53.44049719
-
-![RAM and flash utilization](report/ram_util.png)
 
 ## Advanced Features
 ### Multikey press 
