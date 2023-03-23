@@ -7,13 +7,10 @@
 
 // Constants
 const uint32_t interval = 100; // Display update interval
-volatile int32_t currentStepSize;
 volatile uint8_t keyArray[7];
 volatile uint8_t finArray[12];
 volatile uint8_t send_finArray[12]={1,1,1,1,1,1,1,1,1,1,1,1};
-const int sine[360] = {0, 2, 4, 6, 8, 11, 13, 15, 17, 20, 22, 24, 26, 28, 30, 33, 35, 37, 39, 41, 43, 45, 47, 50, 52, 54, 56, 58, 60, 62, 63, 65, 67, 69, 71, 73, 75, 77, 78, 80, 82, 83, 85, 87, 88, 90, 92, 93, 95, 96, 98, 99, 100, 102, 103, 104, 106, 107, 108, 109, 110, 111, 113, 114, 115, 116, 116, 117, 118, 119, 120, 121, 121, 122, 123, 123, 124, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 128, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 124, 123, 123, 122, 121, 121, 120, 119, 118, 117, 116, 116, 115, 114, 113, 111, 110, 109, 108, 107, 106, 104, 103, 102, 100, 99, 98, 96, 95, 93, 92, 90, 88, 87, 85, 83, 82, 80, 78, 77, 75, 73, 71, 69, 67, 65, 63, 62, 60, 58, 56, 54, 52, 50, 47, 45, 43, 41, 39, 37, 35, 33, 30, 28, 26, 24, 22, 20, 17, 15, 13, 11, 8, 6, 4, 2, 0, -2, -4, -6, -8, -11, -13, -15, -17, -20, -22, -24, -26, -28, -30, -33, -35, -37, -39, -41, -43, -45, -47, -50, -52, -54, -56, -58, -60, -62, -64, -65, -67, -69, -71, -73, -75, -77, -78, -80, -82, -83, -85, -87, -88, -90, -92, -93, -95, -96, -98, -99, -100, -102, -103, -104, -106, -107, -108, -109, -110, -111, -113, -114, -115, -116, -116, -117, -118, -119, -120, -121, -121, -122, -123, -123, -124, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -128, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -124, -123, -123, -122, -121, -121, -120, -119, -118, -117, -116, -116, -115, -114, -113, -111, -110, -109, -108, -107, -106, -104, -103, -102, -100, -99, -98, -96, -95, -93, -92, -90, -88, -87, -85, -83, -82, -80, -78, -77, -75, -73, -71, -69, -67, -65, -64, -62, -60, -58, -56, -54, -52, -50, -47, -45, -43, -41, -39, -37, -35, -33, -30, -28, -26, -24, -22, -20, -17, -15, -13, -11, -8, -6, -4, -2};
 std::string keystrArray[7];
-int time;
 SemaphoreHandle_t keyArrayMutex; // a global handle for a FreeRTOS mutex that can be used by different threads to access the mutex object
 SemaphoreHandle_t messageMutex;
 SemaphoreHandle_t CAN_TX_Semaphore; // transmit thread will use a semaphore to check when it can place a message in the outgoing mailbox
@@ -323,11 +320,6 @@ void sampleISR() //interupt
       int32_t Vout = (phaseAcc[i] >> 24) - 128;
       Vout = Vout >> (8 - knob3Rotation);
       Vfin += Vout;
-
-        // for sine wave
-        // int idx = (((keys[i]<<1)*time)>>22)%360;
-        // Vfin += sine[idx];
-        // (Vfin + 128)>> 25>> (8 - knob3Rotation)
     }
   if(master){
   analogWrite(OUTR_PIN, Vfin + 128);}
@@ -364,8 +356,6 @@ void scanKeysTask(void *pvParameters)
   {
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
     const int32_t keys[13] = {fss(261.63), fss(277.18), fss(293.66), fss(311.13), fss(329.63), fss(349.23), fss(369.99), fss(392), fss(415.3), fss(440), fss(466.16), fss(493.88), 0};
-    // volatile int32_t currentStepSize;
-    // uint8_t keyArray[7];
 
     int32_t stepSizes;
     int32_t prestepSizes;
@@ -457,7 +447,6 @@ void scanKeysTask(void *pvParameters)
         xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
         knob3.knob_val = keyArray[i];
         knob2.knob_val = keyArray[i];
-        // knob3.readknob();
         if(master){
           localknob3 = knob3.detectknob3rot();
           prestate3 = knob3.preknob;
@@ -467,7 +456,6 @@ void scanKeysTask(void *pvParameters)
         }
         localknob2 = knob2.detectknob2rot();
         prestate2 = knob2.preknob;
-        // localknob3 = detectknob3rot(prestate, keypresse, flag);
         xSemaphoreGive(keyArrayMutex);
         __atomic_store_n(&knob3Rotation, localknob3, __ATOMIC_RELAXED);
         __atomic_store_n(&knob2Rotation, localknob2, __ATOMIC_RELAXED);
@@ -477,14 +465,11 @@ void scanKeysTask(void *pvParameters)
         
         xSemaphoreTake(keyArrayMutex, portMAX_DELAY);
         knob1.knob_val = keyArray[i];
-        // knob3.readknob();
         localknob1 = knob1.detectknob1rot();
-        //master = knob1.detectknob1rot();
         prestate1 = knob1.preknob;
 
         xSemaphoreGive(keyArrayMutex);
         __atomic_store_n(&knob1Rotation, localknob1, __ATOMIC_RELAXED);
-        //__atomic_store_n(&master, localknob1, __ATOMIC_RELAXED);
       }
     }
 
@@ -547,15 +532,7 @@ void displayUpdateTask(void *pvParameters)
       else{
         u8g2.print("receiver");
       }
-      // u8g2.setCursor(60, 20);
-      // u8g2.print(knob1Rotation, HEX);
-
-      /*
-      u8g2.setCursor(66, 30);
-      u8g2.print((char)Message[0]);
-      u8g2.print(Message[1]);
-      u8g2.print(Message[2]);
-      */
+    
       xSemaphoreGive(keyArrayMutex);
       drawVolume(vol);
       drawOctave(oct);
@@ -568,25 +545,13 @@ void displayUpdateTask(void *pvParameters)
       }
       
 
-      // __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
-      // String display = mapkey(mapindex(keyArray,i));
-      // u8g2.print(display);
-      // u8g2.print(mapkey(mapindex(keyArray[i],i)));
     }
-    // for(int j=0;j++;j<12){
-    //     std::cout<<"test"<<std::endl;
-    //     std::cout << finArray[j] << ",";
-    // }
-    // int test1 = finArray[4];
-    // std::cout << test1 << std::endl;
 
     // this method uses polling
     /*
     while (CAN_CheckRXLevel())
     */
     if(master){
-            //u8g2.setCursor(66, 20);
-    // u8g2.print(currentStepSize);
 
       // print RX_Message
       xSemaphoreTake(messageMutex, portMAX_DELAY);
