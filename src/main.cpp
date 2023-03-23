@@ -274,7 +274,13 @@ void drawOctave(int octave) {
 void drawNote(int note) {
   int x = NOTE_POSITIONS[note]; // Get the x position of the note
   int y = y_POSITIONS[note];
+  char notes[12]={'C','C','D','D','E','F','F','G','G','A','A','B'};
   u8g2.drawCircle(x, y, 1.5); // Draw a circle at the note position
+  u8g2.setCursor(x,20);
+  u8g2.print(notes[note]);
+  if(note==1||note==3||note==6||note==8||note==10){
+    u8g2.print('#');
+  }
 }
 
 // Function to draw the staff
@@ -541,8 +547,8 @@ void displayUpdateTask(void *pvParameters)
       else{
         u8g2.print("receiver");
       }
-      u8g2.setCursor(60, 20);
-      u8g2.print(knob1Rotation, HEX);
+      // u8g2.setCursor(60, 20);
+      // u8g2.print(knob1Rotation, HEX);
 
       /*
       u8g2.setCursor(66, 30);
@@ -561,83 +567,6 @@ void displayUpdateTask(void *pvParameters)
         }
       }
       
-      if (mapindex(keypresse, i) == 0 && press_key == false)
-      {
-        //drawNote(0);
-        u8g2.drawStr(115, 10, "C");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 1 && press_key == false)
-      {
-        //drawNote(1);
-        u8g2.drawStr(115, 10, "C#");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 2 && press_key == false)
-      {
-        //drawNote(2);
-        u8g2.drawStr(115, 10, "D");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 3 && press_key == false)
-      {
-        //drawNote(3);
-        u8g2.drawStr(115, 10, "D#");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 4 && press_key == false)
-      {
-        //drawNote(4);
-        u8g2.drawStr(115, 10, "E");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 5 && press_key == false)
-      {
-        //drawNote(5);
-        u8g2.drawStr(115, 10, "F");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 6 && press_key == false)
-      {
-        //drawNote(6);
-        u8g2.drawStr(115, 10, "F#");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 7 && press_key == false)
-      {
-        //drawNote(7);
-        u8g2.drawStr(115, 10, "G");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 8 && press_key == false)
-      {
-       //drawNote(8);
-        u8g2.drawStr(110, 10, "G#");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 9 && press_key == false)
-      {
-        //drawNote(9);
-        u8g2.drawStr(115, 10, "A");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 10 && press_key == false)
-      {
-        //drawNote(10);
-        u8g2.drawStr(115, 10, "A#");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 11 && press_key == false)
-      {
-        //drawNote(11);
-        u8g2.drawStr(115, 10, "B");
-        press_key = true;
-      }
-      else if (mapindex(keypresse, i) == 12 && press_key == false)
-      {
-        u8g2.drawStr(115, 10, " ");
-        press_key = false;
-      }
 
       // __atomic_store_n(&currentStepSize, stepSizes, __ATOMIC_RELAXED);
       // String display = mapkey(mapindex(keyArray,i));
@@ -662,7 +591,7 @@ void displayUpdateTask(void *pvParameters)
       // print RX_Message
       xSemaphoreTake(messageMutex, portMAX_DELAY);
       // Copy the contents of the local array to the global array
-      u8g2.setCursor(70, 20);
+      u8g2.setCursor(40, 10);
       u8g2.print((char)RX_Message[0]);
       u8g2.print(RX_Message[1]);
       u8g2.print(RX_Message[2]);
